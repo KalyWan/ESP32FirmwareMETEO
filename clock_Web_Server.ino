@@ -1,182 +1,49 @@
 const char* otaServerIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>";
 
-
 String printDigits(int digits)
 {
   String f=String(digits);
   if (digits < 10) return ("0"+f); else return f;
 }
 
-  
- String genPlot(int *plot_input){
-  int max_value = -32000;
-  int min_value = 32000;
-  String data;
-//   String circleData;
-//   int point;
-  
-  for (byte i = 0; i < 15; i++) {
-    max_value = max(plot_input[i] , max_value);
-    min_value = min(plot_input[i] , min_value);
-  }
-  if (min_value >= max_value) max_value = min_value + 1;
-
-  data += R"rawliteral( 
-  <div class="float">
-  <svg viewBox="0 0 460 140" class="chart">
-  <line x1="1" x2="500" y1="125" y2="125"  style="stroke:#ccc;stroke-width:1"></line>
-  <line x1="35" x2="35" y1="1" y2="140" style="stroke:#ccc;stroke-width:1" ></line>
-  )rawliteral";
-  data += "<g class=\"labels x-labels\"><text x=\"1\" y=\"10\">" + String(max_value) + "</text>\n<text x=\"1\" y=\"123\">" + String(min_value) + "</text></g>\n";
-  
-  data += "<polyline fill=\"none\" stroke=\"#0074d9\" stroke-width=\"3\" points=\"";
-  
-  for (byte i = 0; i < 15; i++) {
-    data += " " + String(i*31+35) + "," + String(125-map(plot_input[i], min_value, max_value, 0, 120)) + " ";
-//     circleData += "<circle cx=\"" + String(i*31+35) + "\" cy=\"" + String(125-map(plot_input[i], min_value, max_value, 0, 120)) + "\" data-value=\"" + String(plot_input[i]) + "\" r=\"4\"><title>" + String(plot_input[i]) + "</title></circle>\n";
-  }
-  data += "\"/>\n";
-//   data += "<g class=\"plotData\"> \n" + circleData + " </g>\n";
-  data += "\"/>\n</svg></div>\n";
-  return data;
-}
-
-
-// function to calculete Humidex
-float calculate_humidex(float temperature, float humidity) {
-  float e;
-  e = (6.112 * pow(10, (7.5 * temperature / (237.7 + temperature))) * humidity / 100); //vapor pressure
-  float humidex = temperature + 0.55555555 * (e - 10.0); //humidex
-  return humidex;
-}
-
-
-void handlePageSelect(){
-  
-   if( server.arg("page").toInt() <=6 ) {
-    
-      if( server.arg("big") == "1" ) bigDig = true;
-      else if (server.arg("big") == "0" ) bigDig = false;
-      
-      mode0scr = server.arg("page").toInt();
-      
-      redrawAllScreen();
-   }
-   
-   server.send(200, "text/html", "<script>\nwindow.location.replace(\"http://" + String(myIP) + "\");\n</script>");
-}
-
-void HandleClient() {
-  
-  unsigned long webpageLoad = millis();
-  
+void HandleClient() 
+{
   char daysOfTheWeek[9][12] = {"   Sunday", "   Monday", "  Tuesday", "Wednesday", " Thursday", "   Friday", " Saturday"};
-  
   DateTime now = rtc.now();
   String webpage;
-  
-  webpage =  "<html>\n<head><title>"+hostName+"</title><meta charset='UTF-8' http-equiv='refresh' content='60' >\n";
-  webpage += R"rawliteral(   <style>
-        body {font-family: Sans; Color: #00979d;}
-        h2 {line-height: 10%;}
-        p {line-height: 20%;}
-        .chart { height: 140px; width: 500; }
-        .chart .grid { stroke: #ccc; stroke-dasharray: 0; stroke-width: 2;}
-        .labels { font-size: 13px;}
-        .chart .plotData { fill: red; stroke-width: 1;}
-        .float { float: left;}
-        .floatclear { clear: both;}
-    </style>
-    </head>
-    <body>
+  webpage =  "<html>";
+  webpage += "<head><title>"+hostName+"</title><meta charset='UTF-8' http-equiv='refresh' content='5' >";
+  webpage += "<style>";
+  webpage += "body {font-family: Verdana; Color: #00979d;}";
+  webpage += "h2 {line-height: 10%;} ";
+  webpage += "p {line-height: 20%;} ";
+  webpage += "</style>";
+  webpage += "</head>";
+  webpage += "<body>";
+  webpage += "<p><b>&nbsp;&nbsp; " + hostName + " </b></p><br>";
+  webpage += "<p>&nbsp; температура </p>";
+  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispTemp) + " °C</h2><br>";
+  webpage += "<p>&nbsp; влажность </p>";
+  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispHum) + " %  </h2><br>";
+  webpage += "<p>&nbsp; атмосферное давление </p>";
+  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispPres) + " мм р.ст.</h2><br>";
+  webpage += "<p>&nbsp; содержание CO2 </p>";
+  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispCO2) + " ppm</h2><br>";
+   
+  webpage += "<p>&nbsp;&nbsp;&nbsp;&nbsp; RTC:" + printDigits(now.hour()) + ":" + printDigits(now.minute()) + ":"  + printDigits(now.second()) + " &nbsp;&nbsp;" + daysOfTheWeek[now.dayOfTheWeek()];
+  webpage += " &nbsp;" + printDigits(now.day()) + "/" + printDigits(now.month()) + "/"  + String(now.year()) + "</p>&nbsp;&nbsp;";
 
-    )rawliteral";
-  webpage += "<p><br><b>&nbsp;&nbsp; " + hostName + " </b></p><br>\n";
-  
-  webpage += "<div class=\"floatclear\"></div><br><p>&nbsp; температура </p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispTemp) + " °C</h2>\n";
-  webpage += "<p> &nbsp; чувствуется как:</p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(calculate_humidex(dispTemp,dispHum)) + " °C</h2>\n"; 
-  webpage += genPlot((int*)tempHour);
-  webpage += genPlot((int*)tempDay);  
-  
-#if (EXT_SENS >= 1)
-  webpage += "<div class=\"floatclear\"></div><br><p>&nbsp; внешняя температура </p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;";
-  
-  if(dispExtTemp != 255) {
-    webpage += String(dispExtTemp) + " °C</h2>\n";
-    webpage += "<p> &nbsp; чувствуется как:</p>\n";
-    webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(calculate_humidex(dispExtTemp,dispExtHum)) + " °C</h2>\n"; 
-    
-    webpage += genPlot((int*)tempExtHour);
-    webpage += genPlot((int*)tempExtDay);  
-    
-    webpage += "<div class=\"floatclear\"></div><br><p>&nbsp;внешняя влажность </p>\n";
-    webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispExtHum) + " %  </h2>\n";
-  }
-  else  webpage += "-Sensor Error-</h2>\n";
-#endif
+  webpage += "<p>&nbsp;&nbsp;&nbsp;&nbsp; NTP:" + printDigits(hour()) + ":" + printDigits(minute()) + ":"  + printDigits(second()) + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+  webpage += " &nbsp;" + printDigits(day()) + "/" + printDigits(month()) + "/"  + String(year()) + "</p>&nbsp;&nbsp;";
 
-  webpage += "<div class=\"floatclear\"></div><br><p>&nbsp; влажность </p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispHum) + " %  </h2>\n";
-      
-  webpage += genPlot((int*)humHour);
-  webpage += genPlot((int*)humDay);  
-  
-  webpage += "<div class=\"floatclear\"></div><br><p>&nbsp; атмосферное давление </p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispPres) + " hPa</h2>\n";
-      
-  webpage += genPlot((int*)pressHour);
-  webpage += genPlot((int*)pressDay); 
-  
-  webpage += "<div class=\"floatclear\"></div><br><p>&nbsp; вероятность осадков </p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispRain) + " %</h2><br>\n";
-  webpage += "<p>&nbsp; содержание CO2 </p>\n";
-  webpage += "<h2><br>&nbsp;&nbsp;&nbsp;&nbsp;" + String(dispCO2) + " ppm</h2>\n";
-  
-  for (byte i = 0; i < 15; i++) {                                          //cleaning zero values from empty cells and
-    if((co2Hour[i]<CO2_MIN) && (dispCO2>=CO2_MIN)) co2Hour[i] = dispCO2;   //filter out cold sensor readings
-    if((co2Day[i]<CO2_MIN) && (dispCO2>=CO2_MIN)) co2Day[i] = dispCO2;
-  }
-  webpage += genPlot((int*)co2Hour);
-  webpage += genPlot((int*)co2Day); 
-  
-  webpage += "<div class=\"floatclear\"></div>\n<p><br>&nbsp;&nbsp;&nbsp;&nbsp; RTC:" + printDigits(now.hour()) + ":" + printDigits(now.minute()) + ":"  + printDigits(now.second()) + " &nbsp;&nbsp;" + daysOfTheWeek[now.dayOfTheWeek()];
-  webpage += " &nbsp;" + printDigits(now.day()) + "/" + printDigits(now.month()) + "/"  + String(now.year()) + "</p>&nbsp;&nbsp;\n";
-
-  webpage += "<p>&nbsp;&nbsp;&nbsp;&nbsp; NTP:" + printDigits(hour()) + ":" + printDigits(minute()) + ":"  + printDigits(second()) + " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\n";
-  webpage += " &nbsp;" + printDigits(day()) + "/" + printDigits(month()) + "/"  + String(year()) + "</p>&nbsp;&nbsp;\n";
-  webpage += "<p>&nbsp;&nbsp;&nbsp;&nbsp;Uptime: "+Uptime()+",&nbsp;&nbsp;WiFi signal: "+ String( WiFi.RSSI()) + "dBm, </p><p>&nbsp;&nbsp;&nbsp;&nbsp;Battery: "+String((float)batteryVoltCalc()/100)+"V ("+analogRead(BATTERY)+"), &nbsp;&nbsp;ExternalBattery: "+String( (float) dispBattExtVolt/100 )+"V,&nbsp;&nbsp;Page generation: "+String(millis()-webpageLoad)+"msec</p><br><br>\n";
-
-  webpage += R"rawliteral(   
-<form  action="/pageselect" method="get">
-  <input type="radio"  name="big" value="0">
-  <label>Small letters</label>
-  <input type="radio"  name="big" value="1">
-  <label>Big letters</label>
-  <select name="page">
-    <option value="0">Clock</option>
-    <option value="1">CO2</option>
-    <option value="2">Temperature</option>
-    <option value="3">Pressure</option>
-    <option value="4">Humidity</option>
-    <option value="5">Temp External</option>
-    <option value="6">Hum External</option>
-  </select>
-  <input type="submit" value="Submit">
-</form>
-  )rawliteral";
-  
-  webpage += "<p>&nbsp;&nbsp; \n<a href='http://"+String(myIP)+"/set_WI_FI'>НАСТРОЙКИ</a></p>&nbsp;&nbsp;<p>\n";
-  webpage += "</body>\n";
-  webpage += "</html>\n";
+  webpage += "<p>&nbsp;&nbsp; <a href='http://"+String(myIP)+"/set_WI_FI'>НАСТРОЙКИ</a></p>";
+  webpage += "</body>";
+  webpage += "</html>";
   server.send(200, "text/html", webpage);
 }
 
-
 void handleRoot() {
-  String webpage;
+    String webpage;
   webpage =  "<html>"; 
   webpage += "<head><title> Setup </title><meta charset='UTF-8'>";
   webpage += "<style>";
@@ -187,12 +54,11 @@ void handleRoot() {
 
   String str = "";
   str += webpage;
-  str += "<boy>\
+  str += "<body>\
    <form method=\"POST\" action=\"ok\">\
-     <input type=\"radio\" value=\"1\" name=\"otaflag\"> Загрузить новую прошивку (после перезагрузки зайдите на страницу устройства и запустите процедуру)</br></br>\
      <input type=\"text\" value=\"" + ssid + "\" name=\"ssid\" maxlength=32> WiFi SSID</br></br>\  
-     <input type=\"password\" value=\"" + pass + "\" name=\"pswd\" maxlength=64> PASSWORD</br></br>\
-     <input type=\"text\" value=\"" + TIMEZONE + "\" name=\"tzn\" maxlength=3> TIMEZONE</br></br>\
+     <input type=\"password\" value=\"" + pass + "\" name=\"pswd\" maxlength=64> PASSWORD</br></br><hr>\
+     <input type=\"text\" value=\"" + TIMEZONE + "\" name=\"tzn\" maxlength=3> TIMEZONE</br></br><hr>\
      <input type=\"text\" value=\"" + mqtt_ip + "\" name=\"mqtt_ip\" maxlength=15> MQTT IP</br></br>\
      <input type=\"text\" value=\"" + mqtt_port + "\" name=\"mqtt_port\" maxlength=5> MQTT PORT</br></br>\
      <input type=\"text\" value=\"" + mqtt_auth + "\" name=\"mqtt_auth\" maxlength=32> MQTT USER</br></br>\
@@ -200,15 +66,18 @@ void handleRoot() {
      <input type=\"text\" value=\"" + mqtt_Temp + "\" name=\"mqtt_temp\" maxlength=64> MQTT Topic (temperature)</br></br>\
      <input type=\"text\" value=\"" + mqtt_Hum + "\" name=\"mqtt_hum\" maxlength=64> MQTT Topic (humidity)</br></br>\
      <input type=\"text\" value=\"" + mqtt_Press + "\" name=\"mqtt_press\" maxlength=64> MQTT Topic (pressure)</br></br>\
-     <input type=\"text\" value=\"" + mqtt_CO2 + "\" name=\"mqtt_co2\" maxlength=64> MQTT Topic (CO2)</br></br>\
+     <input type=\"text\" value=\"" + mqtt_CO2 + "\" name=\"mqtt_co2\" maxlength=64> MQTT Topic (CO2)</br></br><hr>\
+     <input type=\"text\" value=\"" + TempCorrection + "\" name=\"tmpcorr\" maxlength=3> Temperature correction</br></br>\
+     <input type=\"text\" value=\"" + HumCorrection + "\" name=\"humcorr\" maxlength=3> Humidity correction</br></br><hr>\
+     <input type=\"radio\" value=\"0\" name=\"otaflg\"> Сохранить настройки</br></br>\
+     <input type=\"radio\" value=\"1\" name=\"otaflg\"> Загрузить новую прошивку</br></br><hr>\
      <input type=SUBMIT value=\"Save\">\
    </form>\
  </body>\
 </html>";
 
-  server.send ( 200, "text/html", str );
+ server.send ( 200, "text/html", str );
 } 
-
 
 void handleOk(){
   String webpage;
@@ -230,15 +99,19 @@ void handleOk(){
   String mqtt_hum_ap   = server.arg("mqtt_hum");
   String mqtt_press_ap = server.arg("mqtt_press");
   String mqtt_CO2_ap   = server.arg("mqtt_co2");
-  String otaFlag_ap    = server.arg("otaflag");
+  String TMPCORR_ap    = server.arg("tmpcorr");
+  String HUMCORR_ap    = server.arg("humcorr");
+  String otaFlag_ap    = server.arg("otaflg");
   int tz;
+  int tmpc;
+  int humc;
   String str = "";
  
   str += webpage;
   str += "<body>";
   tz = TZN_ap.toInt();
 
-  (otaFlag_ap == "0") ? otaFlag = 0 : otaFlag = 1;
+  otaFlag = (otaFlag_ap == "0") ? 0 : 1;
   
   if( (tz > -12) && (tz < 12) ) TIMEZONE = tz;
   mqtt_ip    = mqtt_ip_ap;
@@ -249,7 +122,7 @@ void handleOk(){
   
   mqtt_pass_ap.replace("%2F","/");
   mqtt_pass  = mqtt_pass_ap;
-  
+
   mqtt_temp_ap.replace("%2F","/");
   mqtt_Temp  = mqtt_temp_ap;
   
@@ -261,6 +134,12 @@ void handleOk(){
   
   mqtt_CO2_ap.replace("%2F","/");
   mqtt_CO2   = mqtt_CO2_ap;
+
+  tmpc = TMPCORR_ap.toInt();
+  TempCorrection = tmpc;
+
+  humc = HUMCORR_ap.toInt();
+  HumCorrection = humc;
 
   ssid_ap.replace("%2F","/");
   pass_ap.replace("%2F","/");
@@ -289,54 +168,51 @@ void handleOk(){
   }
 }
 
-
 void handleOTA() {
-  Serial.println("Starting OTA mode.");    
-  Serial.printf("Sketch size: %u\n", ESP.getSketchSize());
-  Serial.printf("Free size: %u\n", ESP.getFreeSketchSpace());
-  MDNS.begin(host);
-  server.on("/", HTTP_GET, [](){
-    server.sendHeader("Connection", "close");
-    server.sendHeader("Access-Control-Allow-Origin", "*");
-    server.send(200, "text/html", otaServerIndex);
-  });
-  server.on("/update", HTTP_POST, [](){
-    server.sendHeader("Connection", "close");
-    server.sendHeader("Access-Control-Allow-Origin", "*");
-    server.send(200, "text/plain", (Update.hasError())?"FAIL":"OK");
-    setOtaFlag(0); 
-    lcd.clear();
-    delay(100);
-    ESP.restart();
-  },[](){
-    HTTPUpload& upload = server.upload();
-    if(upload.status == UPLOAD_FILE_START){
-      //Serial.setDebugOutput(true);
-      WiFiUDP::stopAll();
-      Serial.printf("Update: %s\n", upload.filename.c_str());
-      otaCount=300;
-      uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
-      if(!Update.begin(maxSketchSpace)){//start with max available size
-        Update.printError(Serial);
-      }
-    } else if(upload.status == UPLOAD_FILE_WRITE){
-      if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
-        Update.printError(Serial);
-      }
-    } else if(upload.status == UPLOAD_FILE_END){
-      if(Update.end(true)){ //true to set the size to the current progress
-        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
-      } else {
-        Update.printError(Serial);
-      }
-      Serial.setDebugOutput(false);
-    }
-    yield();
-  });
-  server.begin();
-  Serial.printf("Ready! Open http://%s.local in your browser\n", host);
-  MDNS.addService("http", "tcp", 80);
-  otaTickLoop.attach(1, otaCountown);
+      Serial.println("Starting OTA mode.");    
+      Serial.printf("Sketch size: %u\n", ESP.getSketchSize());
+      Serial.printf("Free size: %u\n", ESP.getFreeSketchSpace());
+      MDNS.begin(host);
+      server.on("/", HTTP_GET, [](){
+        server.sendHeader("Connection", "close");
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.send(200, "text/html", otaServerIndex);
+      });
+      server.on("/update", HTTP_POST, [](){
+        server.sendHeader("Connection", "close");
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.send(200, "text/plain", (Update.hasError())?"FAIL":"OK");
+        setOtaFlag(0); 
+        lcd.clear();
+        delay(100);
+        ESP.restart();
+      },[](){
+        HTTPUpload& upload = server.upload();
+        if(upload.status == UPLOAD_FILE_START){
+          //Serial.setDebugOutput(true);
+          WiFiUDP::stopAll();
+          Serial.printf("Update: %s\n", upload.filename.c_str());
+          otaCount=300;
+          uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+          if(!Update.begin(maxSketchSpace)){//start with max available size
+            Update.printError(Serial);
+          }
+        } else if(upload.status == UPLOAD_FILE_WRITE){
+          if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
+            Update.printError(Serial);
+          }
+        } else if(upload.status == UPLOAD_FILE_END){
+          if(Update.end(true)){ //true to set the size to the current progress
+            Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+          } else {
+            Update.printError(Serial);
+          }
+          Serial.setDebugOutput(false);
+        }
+        yield();
+      });
+      server.begin();
+      Serial.printf("Ready! Open http://%s.local in your browser\n", host);
+      MDNS.addService("http", "tcp", 80);
+      otaTickLoop.attach(1, otaCountown);
 }
-
-

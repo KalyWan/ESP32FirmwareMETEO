@@ -5,7 +5,6 @@ bool loadConfig() {
     return false;
   }
 
-
   size_t size = configFile.size();
   if (size > 1024) {
     Serial.println("Config file size is too large");
@@ -51,8 +50,10 @@ bool loadConfig() {
   mqtt_Temp = mqtt_TempC;
   mqtt_Hum  = mqtt_HumC;
   mqtt_Press= mqtt_PressC;
-  mqtt_CO2  = mqtt_CO2C; 
-  
+  mqtt_CO2  = mqtt_CO2C;
+
+  TempCorrection  = int(json["TempCorrection"]);
+  HumCorrection  = int(json["HumCorrection"]);
   return true;
 }
 
@@ -72,6 +73,9 @@ bool saveConfig() {
   json["mqttPress"]  = mqtt_Press;
   json["mqttCO2"]    = mqtt_CO2;
 
+  json["TempCorrection"]   = TempCorrection;
+  json["HumCorrection"]   = HumCorrection;
+
   File configFile = LittleFS.open("/config.json", "w");
   if (!configFile) {
     Serial.println("Failed to open config file for writing");
@@ -81,7 +85,6 @@ bool saveConfig() {
   serializeJson(json, configFile);
   return true;
 }
-
 
 void setOtaFlag(int intOta){
   otaFlag=intOta;
