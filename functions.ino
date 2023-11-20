@@ -1,13 +1,5 @@
-void redrawAllScreen(){
-  lcd.clear();
-  loadClock();
-  drawSensors();
-  if (DISPLAY_TYPE == 1) drawData();
-}
-
-
-
-String macToStr(const uint8_t* mac) {
+String macToStr(const uint8_t* mac)
+{
   String result;
   for (int i = 3; i < 6; ++i) {
     result += String(mac[i], 16);
@@ -17,36 +9,177 @@ String macToStr(const uint8_t* mac) {
   return result;
 }
 
-
-void otaCountown(){
-    if(otaCount>0 && otaFlag_==1) {
-      otaCount--;
-      Serial.println(otaCount); 
-    }
+void WiFi_Start() {
+  delay(10);
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  lcd.print(F(" OK"));
+  Serial.print("IP number assigned by DHCP is ");
+  Serial.println(WiFi.localIP());
+  Serial.println("Starting UDP");
+  Udp.begin(localPort);
+  Serial.print("Local port: ");
+  Serial.println(Udp.localPort());
+  Serial.println("waiting for sync");
+  setSyncProvider(getNtpTime);
+  setSyncInterval(300);
+  WiFi.macAddress(mac);
 }
 
+void otaCountown() {
+  if (otaCount > 0 && otaFlag_ == 1) {
+    otaCount--;
+    Serial.println(otaCount);
+  }
+}
+
+void modesTick() {
+  button.tick();
+  boolean changeFlag = false;
+
+  if (button.isSingle()) {                    // одинарное нажатие на кнопку
+    mode0scr++;
+    if (CO2_SENSOR == 0 && mode0scr == 4) mode0scr++;
+    if (mode0scr > 4) mode0scr = 0;
+    changeFlag = true;
+  }
+
+  if (button.isHolded()) {                    // удержание кнопки 
+    bigDig = !bigDig;
+    changeFlag = true;
+  }
+
+  if (changeFlag) {
+    lcd.clear();
+    loadClock();
+    drawSensors();
+    drawData();
+  }
+}
 
 void readSensors() {
-  int t=-1;
+  int t = -1;
   bme.takeForcedMeasurement();
-  dispTemp = bme.readTemperature() + TEMP_COMPENSATION;
-  dispHum = bme.readHumidity();
-//   dispAlt = ((float)dispAlt * 1 + bme.readAltitude(SEALEVELPRESSURE_HPA)) / 2;  // усреднение, чтобы не было резких скачков (с)НР //oriol
-//   dispPres = (float)bme.readPressure() * 0.00750062;          //mmHg 
-  dispPres = (float)bme.readPressure() / 100;                  //hPa
+  dispTemp = bme.readTemperature() + TempCorrection;
+  dispHum = bme.readHumidity() + HumCorrection;
+  dispPres = (float)bme.readPressure() * 0.00750062;
 #if (CO2_SENSOR == 1)
   t = mhz19.getPPM();
-  if( t != -1 ) dispCO2 = t;
+  if ( t != -1 ) dispCO2 = t;
 #else
   dispCO2 = 0;
 #endif
 }
 
+void drawSensors() {
 
-// boolean dotFlag;
+  if (mode0scr != 0 && !bigDig) {                      // время  ----------------------------
+    lcd.setCursor(0, 3);
+    if (hrs / 10 == 0) lcd.print(" ");
+    lcd.print(hrs);
+    lcd.print(":");
+    if (mins / 10 == 0) lcd.print("0");
+    lcd.print(mins);
+    lcd.print(":");
+  } else if (mode0scr == 0) {
+      drawClock(hrs, mins, 0, 0);
+  }
 
+  if (mode0scr != 1) {                                  // Температура  ----------------------------
+    lcd.setCursor(15, 1);
+    lcd.print(String(dispTemp, 1));
+    lcd.write(223);
+  } else {
+    drawTemp(dispTemp, 0, 0);
+  }
 
-boolean testTimer(unsigned long & dataTimer, unsigned long setTimer) {   // Проверка таймеров (с)НР
+  if (mode0scr != 2) {                                  // Влажность  ----------------------------
+    lcd.setCursor(15, 2);
+    lcd.print(String(dispHum) + "%");
+  } else {
+    drawHum(dispHum, 0, 0);
+  }
+
+  if (mode0scr != 3) {                                  // Давление  ---------------------------
+    lcd.setCursor(15, 3);
+    lcd.print(String(dispPres) + "mm");
+  } else {
+    drawPres(dispPres, 0, 0);
+  }
+
+#if (CO2_SENSOR == 1)
+  if (mode0scr != 4 && !bigDig) {                       // СО2  ----------------------------
+      lcd.setCursor(0, 2);
+      lcd.print(String(dispCO2) + "ppm");
+  } else if (mode0scr == 4){
+      drawPPM(dispCO2, 0, 0);
+  }
+#endif
+}
+
+boolean dotFlag;
+
+void clockTick() {
+  dotFlag = !dotFlag;
+  if (dotFlag) {            // каждую секунду пересчёт времени
+    secs++;
+    if (secs > 59) {        // каждую минуту
+      secs = 0;
+      mins++;
+      if (mins <= 59) drawSensors();
+    }
+    if (mins > 59) {                           // каждый час
+      // loadClock();                          // Обновляем знаки, чтобы русские буквы в днях недели тоже обновились. 
+
+      DateTime now = rtc.now();
+      secs = now.second();
+      mins = now.minute();
+      hrs = now.hour();
+      drawSensors();
+      if (hrs > 23) hrs = 0;
+      drawData();
+    }
+    if (mode0scr == 0) {                       // Если режим часов, то показывать секунды в правом верхмем углу
+      lcd.setCursor(16, 0);
+      if (secs < 10) lcd.print("0");
+      lcd.print(secs);
+    }
+    if (mode0scr != 0 && !bigDig) {            // Показывать секунды внизу
+      lcd.setCursor(6, 3);
+      if (secs < 10) lcd.print("0");
+      lcd.print(secs);
+    }
+  }
+
+  // Точки  ---------------------------------------------------
+  byte code;
+  if (dotFlag) code = 165;
+  else code = 32;
+  if (mode0scr == 0) {                        // Мигание точками только в нулевом режиме
+    if (bigDig) lcd.setCursor(7, 2);
+    else lcd.setCursor(7, 0);
+    lcd.write(code);
+    lcd.setCursor(7, 1);
+    lcd.write(code);
+    if (code == 165) code = 58;
+    lcd.setCursor(15, 0);
+    lcd.write(code);
+  }
+    if (mode0scr != 0 && !bigDig) {           // Мигание точками во всех режимах внизу
+      if (code == 165) code = 58;
+      lcd.setCursor(2, 3);
+      lcd.write(code);
+      lcd.setCursor(5, 3);
+      lcd.write(code);
+    }
+}
+
+boolean testTimer(unsigned long & dataTimer, unsigned long setTimer) {   // Проверка таймеров 
   if (millis() - dataTimer >= setTimer) {
     dataTimer = millis();
     return true;
@@ -54,7 +187,6 @@ boolean testTimer(unsigned long & dataTimer, unsigned long setTimer) {   // Пр
     return false;
   }
 }
-
 
 /*-------- NTP code ----------*/
 
@@ -92,7 +224,6 @@ time_t getNtpTime()
   return 0; // return 0 if unable to get the time
 }
 
-
 // send an NTP request to the time server at the given address
 void sendNTPpacket(IPAddress &address)
 {
@@ -115,52 +246,3 @@ void sendNTPpacket(IPAddress &address)
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   Udp.endPacket();
 }
-
-
-long batteryVoltCalc(){
-  long voltage;
-  if(analogRead(BATTERY) <= BATTERY_EMPTY) voltage = 0; 
-  else if(analogRead(BATTERY) >= BATTERY_FULL) voltage = 500; 
-  else voltage = map(analogRead(BATTERY), BATTERY_EMPTY, BATTERY_FULL, BATTERY_V_EMPTY, BATTERY_V_FULL);
-  return voltage;
-}
-
-
-String Uptime(){
-  
-  uint32_t sec = millis() / 1000ul;
-  int timeHours = (sec / 3600ul);
-  int timeMins = (sec % 3600ul) / 60ul;
-  int timeSecs = (sec % 3600ul) % 60ul;
-  int timeDays = timeHours/24;   
-  timeHours = timeHours-(timeDays*24);   
-  
-  String uptime;
-  
-  if (timeDays>0) {                        
-    uptime += timeDays+" days:";
-  }
-  if(String(timeHours).length()==1) uptime += "0"+String(timeHours)+"h:";
-  else uptime += String(timeHours)+"h:";
-  if(String(timeMins).length()==1) uptime += "0"+String(timeMins)+"m:";
-  else uptime += String(timeMins)+"m:";
-  uptime += String(timeSecs)+"s";
-  
-  return uptime;
-}
-
-
-// void wifimanstart() { // Волшебная процедура начального подключения к Wifi.
-//                       // Если не знает к чему подцепить - создает точку доступа ESP8266 и настроечную таблицу http://192.168.4.1
-//                       // Подробнее: https://github.com/tzapu/WiFiManager
-//   WiFiManager wifiManager;
-//   wifiManager.setDebugOutput(debug);
-//   wifiManager.setMinimumSignalQuality();
-//   if (!wifiManager.autoConnect("ESP8266")) {
-//   if (debug) Serial.println("failed to connect and hit timeout");
-//     delay(3000);
-//     //reset and try again, or maybe put it to deep sleep
-//     ESP.reset();
-//     delay(5000); }
-//   if (debug) Serial.println("connected...");
-// }
